@@ -10,8 +10,8 @@ public class Font {
     public Font(String path) {
         fontImage = new Image(path);
 
-        offsets = new int[95];
-        widths = new int[95];
+        offsets = new int[256];
+        widths = new int[256];
 
         int unicode = 0;
 
