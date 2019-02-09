@@ -2,34 +2,89 @@ package com.pixelengine.engine;
 
 import com.pixelengine.engine.gfx.Font;
 import com.pixelengine.engine.gfx.Image;
+import com.pixelengine.engine.gfx.ImageRequest;
 import com.pixelengine.engine.gfx.ImageTile;
 
 import java.awt.image.DataBufferInt;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class RenderEngine {
+    private Font font = Font.STANDARD;
+    private ArrayList<ImageRequest> imageRequest = new ArrayList<ImageRequest>();
+
     private int pixelWidth, pixelHeight;
     private int[] pixels;
+    private int[] zBuffer;
 
-    private Font font = Font.STANDARD;
+    private int zDepth = 0;
+    private boolean processing = false;
 
     public RenderEngine(int width, int height, Window window) {
         pixelWidth = width;
         pixelHeight = height;
         pixels = ((DataBufferInt)window.getImage().getRaster().getDataBuffer()).getData();
+        zBuffer = new int[pixels.length];
     }
 
     public void clear() {
         for (int i = 0; i < pixels.length; i++) {
             pixels[i] = 0;
+            zBuffer[i] = 0;
         }
     }
-    public void setPixel(int x, int y, int value) {
 
-        if ((x < 0 || x >= pixelWidth || y < 0 || y >= pixelHeight) || value == 0xffff00ff) {
+    public void process() {
+        processing = true;
+
+        Collections.sort(imageRequest, new Comparator<ImageRequest>() {
+            @Override
+            public int compare(ImageRequest i0, ImageRequest i1) {
+                if (i0.zDepth < i1.zDepth)  {
+                    return -1;
+                }
+                if (i0.zDepth > i1.zDepth)  {
+                    return 1;
+                }
+                return 0;
+            }
+        });
+
+        for (int i = 0; i < imageRequest.size(); i++) {
+            ImageRequest ir = imageRequest.get(i);
+            setzDepth(ir.zDepth);
+            drawImage(ir.image, ir.offX, ir.offY);
+        }
+        imageRequest.clear();
+        processing = false;
+    }
+
+    public void setPixel(int x, int y, int value) {
+        int alpha = ((value >> 24) & 0xff);
+
+        if ((x < 0 || x >= pixelWidth || y < 0 || y >= pixelHeight) || alpha == 0) {
             return;
         }
 
-        pixels[x + y * pixelWidth] = value;
+        int index = x + y * pixelWidth;
+
+        if (zBuffer[index] > zDepth) {
+            return;
+        }
+        zBuffer[index] = zDepth;
+
+        if (alpha == 255) {
+            pixels[index] = value;
+        } else {
+            int pixelColor = pixels[index];
+
+            int newRed = ((pixelColor >> 16) & 0xff) - (int) ((((pixelColor >> 16) & 0xff) - ((value >> 16) & 0xff)) * (alpha / 255f));
+            int newGreen = ((pixelColor >> 8) & 0xff) - (int) ((((pixelColor >> 8) & 0xff) - ((value >> 8) & 0xff)) * (alpha / 255f));
+            int newBlue = (pixelColor & 0xff) - (int) (((pixelColor & 0xff) - (value & 0xff)) * (alpha / 255f));
+
+            pixels[index] = (255 << 24 | newRed << 16 | newGreen << 8 | newBlue);
+        }
     }
 
     public void drawText(String text, int offX, int offY, int color) {
@@ -49,6 +104,11 @@ public class RenderEngine {
     }
 
     public void drawImage(Image image, int offX, int offY) {
+
+        if (!image.isAlpha() && !processing) {
+            imageRequest.add(new ImageRequest(image, zDepth, offX, offY));
+            return;
+        }
 
 //      ----- Don't Render Code -----
         if (offX < -image.getWidth()) return;
@@ -73,6 +133,11 @@ public class RenderEngine {
     }
 
     public void drawImageTile(ImageTile image, int offX, int offY, int tileX, int tileY) {
+
+        if (!image.isAlpha() && !processing) {
+            imageRequest.add(new ImageRequest(image.getTileImage(tileX, tileY), zDepth, offX, offY));
+            return;
+        }
 
 //      ----- Don't Render Code -----
         if (offX < -image.getTileWidth()) return;
@@ -154,5 +219,13 @@ public class RenderEngine {
 
     public void drawLine(int x1, int y1, int x2, int y2, int thickness, int color) {
 
+    }
+
+    public int getzDepth() {
+        return zDepth;
+    }
+
+    public void setzDepth(int zDepth) {
+        this.zDepth = zDepth;
     }
 }

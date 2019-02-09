@@ -49,10 +49,18 @@ public class PixelEngine implements Runnable {
         pixelEngine.start();
     }
 
-//  ----- Getters -----
+//  ----- Getters & Setters -----
 
     public float deltaTime() {
         return (float)UPDATE_CAP;
+    }
+
+    public int getzDepth() {
+        return renderer.getzDepth();
+    }
+
+    public void setzDepth(int zDepth) {
+        renderer.setzDepth(zDepth);
     }
 
 
@@ -67,6 +75,7 @@ public class PixelEngine implements Runnable {
     public void drawWindow() {
         window.update();
         renderer.clear();
+        renderer.process();
     }
 
 //  ----- Render Engine -----
